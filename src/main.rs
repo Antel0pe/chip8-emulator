@@ -1,6 +1,8 @@
 use std::{fs, time::Duration};
 
-use sdl2::{pixels::Color, event::Event, keyboard::Keycode};
+use crate::display::Display;
+
+mod display;
 
 fn main() {
     /*
@@ -9,7 +11,7 @@ fn main() {
      */
     let mut ram: [u8; 4096] = [0; 4096];
 
-    let mut program_counter: u16 = 0; 
+    let mut program_counter: u16 = 512; 
     // let mut index_register: u16 = 0;
     let mut stack: u16 = 0; // really should be part of main memory 
     let mut delay_timer: u8 = 0;
@@ -24,43 +26,134 @@ fn main() {
     // println!("ROM Contents: {:?}", content);
     // println!("ROM Contents in hex: {:02X?}", content);
 
-    let instructions = content.chunks(2)
-        .map(|b| format!("{:02X?}{:02X?}", b[0], b[1]).to_string())
-        .collect::<Vec<String>>()
-        .join(" ");
-    println!("ROM Instructions {}", instructions);
+    // let instructions = content.chunks(2)
+    //     .map(|b| format!("{:02X?}{:02X?}", b[0], b[1]).to_string())
+    //     .collect::<Vec<String>>()
+    //     .join(" ");
+    // println!("ROM Instructions {}", instructions);
 
-    let hex_instructions = content.chunks(2)
-        .map(|b| [b[0], b[1]])
-        .map(|b| u16::from_be_bytes(b))
-        .collect::<Vec<u16>>();
-    println!("Hex ROM Instructions {:?}", hex_instructions);
+    // let hex_instructions = content.chunks(2)
+    //     .map(|b| [b[0], b[1]])
+    //     .map(|b| u16::from_be_bytes(b))
+    //     .collect::<Vec<u16>>();
+    // println!("Hex ROM Instructions {:?}", hex_instructions);
 
     // println!("1st instruction: {}", 0b1000000000000000 & hex_instructions[1]);
     // println!("2nd instruction: {}", 0b0000100000000000 & hex_instructions[1]);
     // println!("3rd instruction: {}", 0b0000000010000000 & hex_instructions[1]);
     // println!("4th instruction: {}", 0b0000000000001000 & hex_instructions[1]);
 
-    let individual_u4_instructions = content.iter()
-        .map(|b| [b >> 4, b & 0b00001111])
+    let nibble_instructions = content.chunks(2)
+        .map(|b| (b[0] >> 4, b[0] & 0b00001111, b[1] >> 4, b[1] & 0b00001111))
         .fold(Vec::new(), |mut acc, e| {
-            acc.extend(e);
+            acc.push(e);
             acc
         });
-    println!("'U4' Instructions: {:?}", individual_u4_instructions);
-
-
-
+    println!("'U4' Instructions: {:?}", nibble_instructions);
 
     // load memory in to 512 in decimal
     ram[512..512+content.len()]
         .clone_from_slice(&content);
 
     // println!("RAM Contents: {:?}", ram);
+    
+    load_fonts(&mut ram);
 
-    // show_screen();
+    let mut display = Display::new();
 
-    // load_fonts(&mut ram);
+    loop{
+        let first_byte = ram.get(program_counter as usize).unwrap();
+        let second_byte = ram.get((program_counter+1) as usize).unwrap();
+        program_counter += 2;
+
+        let current_instruction = (
+            first_byte >> 4, first_byte & 0b00001111,
+            second_byte >> 4, second_byte & 0b00001111,
+        );      
+
+        println!("{:?}", current_instruction);
+
+        match current_instruction {
+            // 00E0
+            (0, 0, 14, 0) =>{
+                display.clear_screen();
+                println!("Clear screen!");
+            },
+            // 1NNN
+            (1, n0, n1, n2) =>{
+                let address = u16::from_be_bytes([n0, (n1 << 4 | n2)]);
+                println!("Jump to {}", address);
+
+                program_counter = address;
+
+                println!("Remove if not working on IBM Logo");
+                ::std::thread::sleep(Duration::new(1000, 1));
+                // break; // TEMP BECAUSE IBM LOGO REPEATS HERE
+            },
+            //6XNN
+            (6, x, n0, n1) =>{
+                println!("Set register V{} to {}", x, (n0 << 4) + n1);
+
+                variable_registers[x as usize] = (n0 << 4) + n1;
+            },
+            //7XNN
+            (7, x, n0, n1) =>{
+                println!("To register V{} add {}", x, (n0 << 4) + n1);
+
+                variable_registers[x as usize] += (n0 << 4) + n1;
+            },
+            //ANNN
+            (10, n0, n1, n2) =>{
+                let value = u16::from_be_bytes([n0, (n1 << 4 | n2)]);
+
+                println!("Set index register I to {}", value);
+
+                set_index_register(&mut ram, value);
+            },
+            //DXYN
+            (13, x, y, n0) =>{
+                let mut x_coord = variable_registers[x as usize] % 63;
+                let mut y_coord = variable_registers[y as usize] % 31;
+
+                println!("Draw to ({}, {}) from this location {}, {} pixels tall", x_coord, y_coord, get_index_register(&ram), n0);
+
+                variable_registers[0x0f] = 0;
+
+                let index_register_value = get_index_register(&ram);
+                for row in 0..n0{
+                    x_coord = variable_registers[x as usize] % 63;
+                    println!("Looking at {} {}", x_coord, y_coord);
+                    if y_coord > 31{ break; }
+
+                    let sprite_data = ram[(index_register_value+row as u16) as usize];
+
+                    for bit_shift in (0..=7).rev(){
+                        println!("Bit shifting {}", bit_shift);
+                        let bit = sprite_data >> bit_shift;
+
+                        if x_coord > 63{ break; }
+
+                        if bit == 0{ continue; }
+
+                        if display.get_pixel_at(x_coord as u32, y_coord as u32){
+                            variable_registers[0x0f] = 1;
+                        } 
+
+                        display.flip_pixel_on_screen(x_coord as u32, y_coord as u32)
+                            .expect(&format!("Could not flip pixels ({}, {}) for DXYN.", x_coord, y_coord));
+
+                        x_coord += 1;
+                    }
+
+                    y_coord += 1;
+                }
+            },
+
+            _ =>{
+                println!("Unrecognized instruction");
+            },
+        }
+    }
 
 
 
@@ -100,38 +193,16 @@ pub fn set_index_register(ram: &mut [u8; 4096], value: u16){
         .clone_from_slice(&value.to_be_bytes());
 }
 
-pub fn show_screen(){
-    let sdl_context = sdl2::init().unwrap();
-    let video_system = sdl_context.video().unwrap();
+pub fn increment_index_register(ram: &mut [u8; 4096], increment: u16){
+    let index_register_position = 160;
 
-    let window = video_system.window("Chip-8 Emulator", 64*10, 32*10)
-        .position_centered()
-        .build()
-        .unwrap();
+    let current_value = u16::from_be_bytes([ram[index_register_position], ram[index_register_position+1]]);
 
-    let mut canvas = window.into_canvas().build().unwrap();
-
-    canvas.set_draw_color(Color::RGB(0, 255, 255));
-    canvas.clear();
-    canvas.present();
-    let mut event_pump = sdl_context.event_pump().unwrap();
-    let mut i = 0;
-    'running: loop {
-        i = (i + 1) % 255;
-        canvas.set_draw_color(Color::RGB(i, 64, 255 - i));
-        canvas.clear();
-        for event in event_pump.poll_iter() {
-            match event {
-                Event::Quit {..} |
-                Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
-                    break 'running
-                },
-                _ => {}
-            }
-        }
-        // The rest of the game loop goes here...
-
-        canvas.present();
-            ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
-    }
+    set_index_register(ram, current_value + increment);
 }
+
+pub fn get_index_register(ram: &[u8; 4096]) -> u16{
+    let index_register_position = 160;
+    u16::from_be_bytes([ram[index_register_position], ram[index_register_position+1]])
+}
+
