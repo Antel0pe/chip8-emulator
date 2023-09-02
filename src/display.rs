@@ -1,4 +1,4 @@
-use sdl2::{pixels::Color, event::Event, keyboard::Keycode, video::Window, render::Canvas, Sdl, rect::Rect};
+use sdl2::{pixels::Color, video::Window, render::Canvas, Sdl, rect::{Rect, Point}, event::Event, keyboard::Keycode};
 use std::time::Duration;
 
 pub const SCREEN_WIDTH: u32 = 64;
@@ -40,7 +40,7 @@ impl Display{
     }
 
     pub fn get_pixel_at(&self, x: u32, y: u32) -> bool{
-        println!("({}, {})", x, y);
+        // println!("({}, {})", x, y);
         self.pixels[self.get_pixels_xy_idx(x, y)]
     }
 
@@ -60,8 +60,8 @@ impl Display{
 
     pub fn flip_pixel_on_screen(&mut self, x: u32, y: u32) -> Result<(), String>{
         let scaled_rect = self.translate_point_to_rect(x, y);
-        println!("Given coords ({}, {})", x, y);
-        println!("Center of drawn rect {:?}", scaled_rect.center());
+        // println!("Given coords ({}, {})", x, y);
+        // println!("Center of drawn rect {:?}", scaled_rect.center());
         let color: Color;
 
         if self.get_pixel_at(x, y){
@@ -74,9 +74,28 @@ impl Display{
 
         self.canvas.set_draw_color(color);
         self.canvas.fill_rect(scaled_rect)?;
+
+        // // temp testing
+        // if self.get_pixel_at(x, y){
+        //     self.canvas.set_draw_color(Color::MAGENTA);
+        //     self.canvas.draw_line(scaled_rect.top_left(), scaled_rect.bottom_left())?;
+        // }
         self.canvas.present();
 
         Ok(())
+    }
+
+    pub fn tick(&mut self){
+        let mut event_pump = self.sdl_context.event_pump().unwrap();
+        
+        for event in event_pump.poll_iter() {
+            match event {
+                Event::Quit {..} |
+                Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
+                },
+                _ => {}
+            }
+        }
     }
 
 }

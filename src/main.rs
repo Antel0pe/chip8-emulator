@@ -49,16 +49,16 @@ fn main() {
             acc.push(e);
             acc
         });
-    println!("'U4' Instructions: {:?}", nibble_instructions);
+    // println!("'U4' Instructions: {:?}", nibble_instructions);
 
     // load memory in to 512 in decimal
     ram[512..512+content.len()]
         .clone_from_slice(&content);
-
-    // println!("RAM Contents: {:?}", ram);
     
     load_fonts(&mut ram);
 
+    // println!("RAM Contents: {:?}", ram);
+    
     let mut display = Display::new();
 
     loop{
@@ -86,8 +86,8 @@ fn main() {
 
                 program_counter = address;
 
-                println!("Remove if not working on IBM Logo");
-                ::std::thread::sleep(Duration::new(1000, 1));
+                // println!("Remove if not working on IBM Logo");
+                // ::std::thread::sleep(Duration::new(1000, 1));
                 // break; // TEMP BECAUSE IBM LOGO REPEATS HERE
             },
             //6XNN
@@ -115,47 +115,45 @@ fn main() {
                 let mut x_coord = variable_registers[x as usize] % 63;
                 let mut y_coord = variable_registers[y as usize] % 31;
 
-                println!("Draw to ({}, {}) from this location {}, {} pixels tall", x_coord, y_coord, get_index_register(&ram), n0);
-
                 variable_registers[0x0f] = 0;
 
                 let index_register_value = get_index_register(&ram);
                 for row in 0..n0{
                     x_coord = variable_registers[x as usize] % 63;
-                    println!("Looking at {} {}", x_coord, y_coord);
+
                     if y_coord > 31{ break; }
 
                     let sprite_data = ram[(index_register_value+row as u16) as usize];
 
                     for bit_shift in (0..=7).rev(){
-                        println!("Bit shifting {}", bit_shift);
-                        let bit = sprite_data >> bit_shift;
+                        let bit = sprite_data >> bit_shift & 1;
 
                         if x_coord > 63{ break; }
 
-                        if bit == 0{ continue; }
-
-                        if display.get_pixel_at(x_coord as u32, y_coord as u32){
-                            variable_registers[0x0f] = 1;
-                        } 
-
-                        display.flip_pixel_on_screen(x_coord as u32, y_coord as u32)
-                            .expect(&format!("Could not flip pixels ({}, {}) for DXYN.", x_coord, y_coord));
+                        if bit == 1{ 
+                            if display.get_pixel_at(x_coord as u32, y_coord as u32){
+                                variable_registers[0x0f] = 1;
+                            } 
+                            
+                            display.flip_pixel_on_screen(x_coord as u32, y_coord as u32)
+                                .expect(&format!("Could not flip pixels ({}, {}) for DXYN.", x_coord, y_coord));
+                        }
 
                         x_coord += 1;
                     }
 
                     y_coord += 1;
                 }
+
             },
 
             _ =>{
                 println!("Unrecognized instruction");
             },
         }
+
+        display.tick();
     }
-
-
 
     
 }
