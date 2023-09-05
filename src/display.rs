@@ -1,5 +1,6 @@
-use sdl2::{pixels::Color, video::Window, render::Canvas, Sdl, rect::{Rect, Point}, event::Event, keyboard::Keycode};
-use std::time::Duration;
+use std::{collections::{HashSet, HashMap}, hash::Hash};
+
+use sdl2::{pixels::Color, video::Window, render::Canvas, Sdl, rect::{Rect, Point}, event::Event, keyboard::{Keycode, Scancode}};
 
 pub const SCREEN_WIDTH: u32 = 64;
 pub const SCREEN_HEIGHT: u32 = 32;
@@ -96,6 +97,42 @@ impl Display{
                 _ => {}
             }
         }
+    }
+
+    fn get_key_presses(&self) -> Vec<Scancode>{
+        let event_pump = self.sdl_context.event_pump().unwrap();
+
+        event_pump.keyboard_state()
+            .pressed_scancodes()
+            .collect()
+    }
+
+    pub fn get_keypad_press(&self) -> Vec<u8>{
+        let keypad_scancodes: HashMap<Scancode, u8> = HashMap::from([
+            (Scancode::Num0, 0x0),
+            (Scancode::Num1, 0x1),
+            (Scancode::Num2, 0x2),
+            (Scancode::Num3, 0x3),
+            (Scancode::Num4, 0x4), 
+            (Scancode::Num5, 0x5),
+            (Scancode::Num6, 0x6),
+            (Scancode::Num7, 0x7),
+            (Scancode::Num8, 0x8),
+            (Scancode::Num9, 0x9),
+            (Scancode::A, 0xA),
+            (Scancode::B, 0xB),
+            (Scancode::C, 0xC),
+            (Scancode::D, 0xD),
+            (Scancode::E, 0xE),
+            (Scancode::F, 0xF),
+        ]);
+        
+        let scancodes_pressed = self.get_key_presses();
+
+        scancodes_pressed.iter()
+            .filter(|code| keypad_scancodes.contains_key(code))
+            .map(|code| *keypad_scancodes.get(code).unwrap())
+            .collect()
     }
 
 }
