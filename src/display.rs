@@ -1,6 +1,6 @@
-use std::{collections::{HashSet, HashMap}, hash::Hash};
+use std::collections::HashMap;
 
-use sdl2::{pixels::Color, video::Window, render::Canvas, Sdl, rect::{Rect, Point}, event::Event, keyboard::{Keycode, Scancode}};
+use sdl2::{pixels::Color, video::Window, render::Canvas, Sdl, rect::Rect, event::Event, keyboard::{Keycode, Scancode}};
 
 pub const SCREEN_WIDTH: u32 = 64;
 pub const SCREEN_HEIGHT: u32 = 32;
